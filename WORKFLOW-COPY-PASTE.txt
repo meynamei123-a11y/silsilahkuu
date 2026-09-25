@@ -1,0 +1,66 @@
+name: Build SilsilahKu APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          echo "Cek file zip..."
+          ls -la
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          echo "ZIP ditemukan: $ZIP_FILE"
+          if [ -f "$ZIP_FILE" ]; then
+            unzip -o "$ZIP_FILE" -d ./temp_extract
+            # pindahkan isi temp_extract ke root (timpa)
+            shopt -s dotglob
+            mv ./temp_extract/* . 2>/dev/null || mv ./temp_extract/**/* . 2>/dev/null || true
+            # kalau masih ada folder di dalam temp_extract
+            if [ -d "./temp_extract" ]; then
+              cp -r ./temp_extract/* . 2>/dev/null || true
+              cp -r ./temp_extract/.* . 2>/dev/null || true
+            fi
+            rm -rf ./temp_extract
+            rm -f "$ZIP_FILE"
+          fi
+          ls -la
+          ls -la .github/workflows/ || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Web
+        working-directory: app/src/main/assets/public
+        run: |
+          npm install
+          npm run build || echo "build skip"
+          npx cap sync android || true
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SilsilahKu-APK-SIAP-INSTALL
+          path: app/build/outputs/apk/debug/app-debug.apk
